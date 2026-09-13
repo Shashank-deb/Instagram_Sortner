@@ -32,13 +32,19 @@ try {
 
 /** Additive migrations for databases created by an earlier version. */
 function migrate(): void {
-  const columns = db
-    .prepare<[string], { name: string }>('SELECT name FROM pragma_table_info(?)')
-    .all('accounts')
-    .map((row) => row.name);
-  if (!columns.includes('last_seen_run')) {
+  const columnsOf = (table: string) =>
+    db
+      .prepare<[string], { name: string }>('SELECT name FROM pragma_table_info(?)')
+      .all(table)
+      .map((row) => row.name);
+
+  if (!columnsOf('accounts').includes('last_seen_run')) {
     log.info('migrating: adding accounts.last_seen_run');
     db.exec('ALTER TABLE accounts ADD COLUMN last_seen_run INTEGER');
+  }
+  if (!columnsOf('actions').includes('dry_run')) {
+    log.info('migrating: adding actions.dry_run');
+    db.exec('ALTER TABLE actions ADD COLUMN dry_run INTEGER NOT NULL DEFAULT 0');
   }
 }
 
@@ -382,6 +388,7 @@ interface ActionRow {
   executed_at: number | null;
   attempts: number;
   error: string | null;
+  dry_run: number;
 }
 
 function toAction(row: ActionRow): UnfollowAction {
@@ -394,14 +401,17 @@ function toAction(row: ActionRow): UnfollowAction {
     executedAt: row.executed_at,
     attempts: row.attempts,
     error: row.error,
+    dryRun: row.dry_run === 1,
   };
 }
 
-export function enqueueAction(accountPk: string, username: string): UnfollowAction | null {
+export function enqueueAction(accountPk: string, username: string, dryRun: boolean): UnfollowAction | null {
   try {
     const info = db
-      .prepare('INSERT INTO actions (account_pk, username, status, requested_at) VALUES (?, ?, ?, ?)')
-      .run(accountPk, username, 'queued', now());
+      .prepare(
+        'INSERT INTO actions (account_pk, username, status, requested_at, dry_run) VALUES (?, ?, ?, ?, ?)',
+      )
+      .run(accountPk, username, 'queued', now(), dryRun ? 1 : 0);
     return getAction(Number(info.lastInsertRowid));
   } catch (err) {
     // Unique partial index: an action for this account is already in flight.

@@ -15,7 +15,7 @@ import {
   recoverStaleActions,
   releaseAction,
 } from '../db/index.js';
-import { activeProvider, unfollowLimiter } from '../providers/index.js';
+import { activeProvider, unfollowLimiter, WebProvider } from '../providers/index.js';
 import type { UnfollowAction } from '../core/types.js';
 
 const log = createLogger('unfollow');
@@ -29,6 +29,10 @@ export interface QueueState {
   consecutiveFailures: number;
   limits: ReturnType<typeof unfollowLimiter.usage>;
   nextEligibleInMs: number;
+  /** When true, actions are simulated and nothing is sent to Instagram. */
+  dryRun: boolean;
+  /** When true, dry run is pinned on by DRY_RUN in the environment. */
+  dryRunLocked: boolean;
 }
 
 /**
@@ -45,6 +49,7 @@ class UnfollowQueue {
   private current: { id: number; username: string } | null = null;
   private consecutiveFailures = 0;
   private loopHandle: Promise<void> | null = null;
+  private dryRun = config.dryRun;
 
   start(): void {
     const recovered = recoverStaleActions();
@@ -62,7 +67,26 @@ class UnfollowQueue {
       consecutiveFailures: this.consecutiveFailures,
       limits: unfollowLimiter.usage(),
       nextEligibleInMs: this.paused ? -1 : unfollowLimiter.check().waitMs,
+      dryRun: this.dryRun,
+      dryRunLocked: config.dryRunLocked,
     };
+  }
+
+  /**
+   * Turn simulation on or off at runtime. DRY_RUN in the environment is a floor,
+   * not a default: when it is set, nothing here - or anything reachable from the
+   * browser - can switch real unfollows back on.
+   */
+  setDryRun(enabled: boolean): void {
+    if (config.dryRunLocked && !enabled) {
+      throw new AppError(
+        'Dry run is locked on by DRY_RUN in the environment. Remove it and restart to send real unfollows.',
+        409,
+        'dry_run_locked',
+      );
+    }
+    this.dryRun = enabled;
+    log.info(`dry run ${enabled ? 'enabled - nothing will be sent to Instagram' : 'disabled - unfollows are real'}`);
   }
 
   pause(reason: string): void {
@@ -85,6 +109,9 @@ class UnfollowQueue {
     if (!provider.capabilities.unfollow) {
       throw new ProviderUnsupportedError('unfollow accounts', provider.name);
     }
+    // Surface an unusable session on the click that queued the action, rather
+    // than as a mystery failure a minute later when the worker gets to it.
+    if (!this.dryRun && provider instanceof WebProvider) provider.requireWritableSession();
     const account = getAccount(pk);
     if (!account) throw new AppError('Unknown account.', 404, 'not_found');
     if (account.status !== 'following') {
@@ -98,9 +125,9 @@ class UnfollowQueue {
         'needs_sync',
       );
     }
-    const action = enqueueAction(pk, account.username);
+    const action = enqueueAction(pk, account.username, this.dryRun);
     if (!action) throw new AppError(`An unfollow for @${account.username} is already queued.`, 409, 'duplicate');
-    log.info(`queued unfollow for @${account.username}`);
+    log.info(`queued ${this.dryRun ? 'DRY RUN ' : ''}unfollow for @${account.username}`);
     return { action };
   }
 
@@ -140,18 +167,26 @@ class UnfollowQueue {
 
       try {
         // Wait for a slot first, then re-check we were not paused during the wait.
-        await this.waitForSlot();
+        // A simulated action makes no request, so it consumes no quota.
+        if (!action.dryRun) await this.waitForSlot();
         if (this.paused) {
           releaseAction(action.id);
           this.current = null;
           continue;
         }
 
-        const provider = activeProvider();
-        await provider.unfollow!(action.accountPk, action.username);
-
-        markUnfollowed(action.accountPk);
-        completeAction(action.id, 'done', null);
+        if (action.dryRun) {
+          // Deliberately nothing: no request, no quota consumed, and the account
+          // is left untouched so local state never claims something that did not
+          // happen. The action row is the record of what *would* have been sent.
+          completeAction(action.id, 'done', null);
+          log.info(`dry run: would have unfollowed @${action.username} (${action.accountPk})`);
+        } else {
+          const provider = activeProvider();
+          await provider.unfollow!(action.accountPk, action.username);
+          markUnfollowed(action.accountPk);
+          completeAction(action.id, 'done', null);
+        }
         this.consecutiveFailures = 0;
       } catch (err) {
         const message = (err as Error).message;

@@ -134,17 +134,47 @@ function avatarNode(account) {
   return wrap;
 }
 
+/**
+ * What the action column shows instead of an Unfollow button. A queued action
+ * can still be called off; one already in flight cannot.
+ */
 function statusTag(account) {
   const pending = account.pendingAction;
   if (pending) {
-    return el('span', {
-      className: 'tag tag--pending',
-      textContent: pending.status === 'running' ? 'Unfollowing…' : 'Queued',
-    });
+    const label = pending.status === 'running' ? 'Unfollowing…' : pending.dryRun ? 'Dry run' : 'Queued';
+    const tag = el('span', { className: 'tag tag--pending', textContent: label });
+    if (pending.status !== 'queued') return tag;
+    return el('div', { className: 'pending-cell' }, [
+      tag,
+      el('button', {
+        className: 'btn btn--sm btn--ghost',
+        type: 'button',
+        textContent: 'Cancel',
+        title: `Cancel the queued unfollow for @${account.username}`,
+        onclick: (event) => cancelPending(pending, event.currentTarget),
+      }),
+    ]);
   }
   if (account.status === 'unfollowed') return el('span', { className: 'tag tag--done', textContent: 'Unfollowed' });
   if (account.status === 'gone') return el('span', { className: 'tag', textContent: 'Not following' });
   return null;
+}
+
+async function cancelPending(action, button) {
+  button.disabled = true;
+  try {
+    const result = await api(`/unfollow/${action.id}`, { method: 'DELETE' });
+    if (result.canceled) {
+      toast(`Cancelled the unfollow for @${action.username}`, 'ok');
+    } else {
+      // It slipped past "queued" between render and click.
+      toast(`Too late — @${action.username} is already being unfollowed.`, 'error');
+    }
+  } catch (err) {
+    toast(err.message, 'error');
+    button.disabled = false;
+  }
+  refreshStatus();
 }
 
 function rowNode(account) {
@@ -233,6 +263,23 @@ function renderBanners(status) {
   }
   if (sync?.progress?.phase === 'error' && sync.progress.error) {
     nodes.push(banner('error', `Last sync failed: ${sync.progress.error}`));
+  }
+  if (queue?.dryRun) {
+    nodes.push(
+      banner(
+        'ok',
+        queue.dryRunLocked
+          ? 'Dry run is locked on by DRY_RUN in the environment. Unfollows are simulated and never sent.'
+          : 'Dry run is on. Unfollow buttons record what would happen and send nothing to Instagram.',
+        queue.dryRunLocked ? null : 'Turn off',
+        async () => {
+          await api('/queue/dry-run', { method: 'POST', json: { enabled: false } }).catch((err) =>
+            toast(err.message, 'error'),
+          );
+          refreshStatus();
+        },
+      ),
+    );
   }
   if (!capabilities?.unfollow) {
     nodes.push(
@@ -348,6 +395,8 @@ async function refreshStatus() {
     renderBanners(status);
     renderQueueInfo(status.queue);
 
+    renderModePill(status);
+
     const progress = status.sync?.progress ?? {};
     const syncing = Boolean(progress.running);
     $('#btn-sync').disabled = syncing || !status.capabilities?.liveSync;
@@ -378,6 +427,27 @@ async function refreshStatus() {
   }
 }
 
+/**
+ * The single most important thing on screen: whether clicking Unfollow will
+ * touch the real account. Three states, never ambiguous.
+ */
+function renderModePill(status) {
+  const pill = $('#mode');
+  if (status.queue?.dryRun) {
+    pill.textContent = 'Dry run';
+    pill.className = 'pill pill--dry';
+    pill.title = 'Unfollows are simulated. Nothing is sent to Instagram.';
+  } else if (status.capabilities?.unfollow) {
+    pill.textContent = 'Live';
+    pill.className = 'pill pill--live';
+    pill.title = 'Connected to Instagram. Unfollowing is real and permanent.';
+  } else {
+    pill.textContent = 'Read-only';
+    pill.className = 'pill pill--read';
+    pill.title = 'Archive data. This app cannot change your account.';
+  }
+}
+
 function schedulePoll(delay) {
   clearTimeout(pollTimer);
   pollTimer = setTimeout(refreshStatus, delay);
@@ -387,6 +457,16 @@ let lastQueueSignature = '';
 
 function renderQueueInfo(queue) {
   if (!queue) return;
+
+  const toggle = $('#dry-run');
+  toggle.checked = Boolean(queue.dryRun);
+  toggle.disabled = Boolean(queue.dryRunLocked);
+  $('#dry-run-note').firstElementChild.textContent = queue.dryRunLocked
+    ? 'Locked on by DRY_RUN in the environment. Remove it and restart to send real unfollows.'
+    : queue.dryRun
+      ? 'Nothing reaches Instagram while this is on.'
+      : 'Off: every confirmed unfollow is real and permanent.';
+
   const limits = queue.limits ?? {};
   $('#queue-info').replaceChildren(
     ...[
@@ -401,7 +481,7 @@ function renderQueueInfo(queue) {
 
   // Refresh the visible rows only when the queue actually changed, so scrolling
   // is never interrupted by a poll that found nothing new.
-  const signature = `${queue.queued}|${queue.current?.id ?? ''}|${queue.paused}`;
+  const signature = `${queue.queued}|${queue.current?.id ?? ''}|${queue.paused}|${queue.dryRun}`;
   if (signature !== lastQueueSignature) {
     lastQueueSignature = signature;
     if (state.offset > 0) refreshVisibleRows();
@@ -429,8 +509,17 @@ let pendingTarget = null;
 
 function askUnfollow(account) {
   pendingTarget = account;
-  $('#confirm-text').textContent =
-    `Unfollow @${account.username}${account.fullName ? ` (${account.fullName})` : ''} on Instagram?`;
+  const who = `@${account.username}${account.fullName ? ` (${account.fullName})` : ''}`;
+  const dry = state.queue?.dryRun;
+  $('#confirm-title').textContent = dry ? 'Simulate unfollow?' : 'Unfollow?';
+  $('#confirm-go').textContent = dry ? 'Simulate' : 'Unfollow';
+  $('#confirm-go').classList.toggle('btn--danger', !dry);
+  $('#confirm-text').textContent = dry
+    ? `Dry run: record what would happen to ${who}. Nothing is sent to Instagram and you stay following them.`
+    : `Unfollow ${who} on Instagram? This takes effect on your real account.`;
+  $('#confirm-note').textContent = dry
+    ? 'Turn dry run off in Settings when you want this to be real.'
+    : 'This queues a real unfollow on your Instagram account. It is rate-limited and runs one at a time.';
   $('#confirm').showModal();
 }
 
@@ -443,7 +532,12 @@ async function doUnfollow() {
       method: 'POST',
       json: { confirmUsername: account.username },
     });
-    toast(`Queued unfollow for @${account.username}`, 'ok');
+    toast(
+      state.queue?.dryRun
+        ? `Dry run: nothing sent for @${account.username}`
+        : `Queued unfollow for @${account.username}`,
+      'ok',
+    );
     refreshStatus();
   } catch (err) {
     toast(err.message, 'error');
@@ -625,6 +719,18 @@ function init() {
     toast('Token saved', 'ok');
     refreshStatus();
     loadPage({ reset: true });
+  });
+
+  $('#dry-run').addEventListener('change', async (event) => {
+    const enabled = event.target.checked;
+    try {
+      await api('/queue/dry-run', { method: 'POST', json: { enabled } });
+      toast(enabled ? 'Dry run on — nothing will be sent' : 'Dry run off — unfollows are real', enabled ? 'ok' : 'error');
+    } catch (err) {
+      toast(err.message, 'error');
+      event.target.checked = !enabled;
+    }
+    refreshStatus();
   });
 
   for (const [id, path] of [

@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS actions (
   requested_at INTEGER NOT NULL,
   executed_at  INTEGER,
   attempts     INTEGER NOT NULL DEFAULT 0,
-  error        TEXT
+  error        TEXT,
+  dry_run      INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_actions_status ON actions (status, id);

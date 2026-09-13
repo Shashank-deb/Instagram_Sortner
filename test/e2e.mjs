@@ -120,6 +120,57 @@ await page.screenshot({ path: `${S}/unfollowed-view.png` });
 await page.selectOption('#status', 'following');
 await page.waitForTimeout(700);
 
+// --- per-row cancel --------------------------------------------------------
+// Pause the queue so a queued action stays cancellable long enough to click.
+await fetch(`${appUrl}/api/queue/pause`, { method: 'POST' });
+const cancelRow = page.locator('.row').first();
+const cancelHandle = (await cancelRow.locator('.handle a').textContent()).replace('@', '');
+await cancelRow.getByRole('button', { name: 'Unfollow' }).click();
+await page.waitForSelector('#confirm[open]');
+await page.click('#confirm-go');
+
+await page.waitForSelector('.pending-cell .btn');
+await page.screenshot({ path: `${S}/queued-cancel.png` });
+await page.locator('.pending-cell .btn').first().click();
+await waitFor(async () => (await page.locator('.pending-cell').count()) === 0, 10000);
+const sentAfterCancel = unfollowed.length;
+await fetch(`${appUrl}/api/queue/resume`, { method: 'POST' });
+await page.waitForTimeout(1500);
+if (unfollowed.length !== sentAfterCancel) problems.push('a cancelled action was still sent after resuming');
+if (unfollowed.includes(cancelHandle)) problems.push('cancelled account was unfollowed anyway');
+console.log('✓ per-row cancel stops a queued unfollow from ever being sent');
+
+// --- dry run ---------------------------------------------------------------
+await page.click('#btn-settings');
+await page.check('#dry-run');
+await page.waitForTimeout(500);
+await page.click('#settings button[data-close]');
+await waitFor(async () => (await page.locator('#mode').textContent()) === 'Dry run', 8000);
+
+const sentBeforeDryRun = unfollowed.length;
+const dryRow = page.locator('.row').first();
+const dryHandle = (await dryRow.locator('.handle a').textContent()).replace('@', '');
+await dryRow.getByRole('button', { name: 'Unfollow' }).click();
+await page.waitForSelector('#confirm[open]');
+const dryTitle = await page.locator('#confirm-title').textContent();
+if (!/simulate/i.test(dryTitle)) problems.push(`dry-run dialog still says "${dryTitle}"`);
+await page.screenshot({ path: `${S}/dry-run-confirm.png` });
+await page.click('#confirm-go');
+await page.waitForTimeout(2500);
+
+if (unfollowed.length !== sentBeforeDryRun) problems.push('DRY RUN SENT A REAL UNFOLLOW');
+const stillListed = await page.locator('.row .handle a').allTextContents();
+if (!stillListed.includes(`@${dryHandle}`)) problems.push('dry run removed the account from Following');
+await page.screenshot({ path: `${S}/dry-run-after.png` });
+console.log(`✓ dry run sent nothing and left @${dryHandle} followed`);
+
+await page.click('#btn-settings');
+await page.uncheck('#dry-run');
+await page.waitForTimeout(500);
+await page.click('#settings button[data-close]');
+await waitFor(async () => (await page.locator('#mode').textContent()) === 'Live', 8000);
+console.log('✓ mode indicator tracks dry run / live');
+
 // Refusing at the dialog must not queue anything.
 await page.locator('.row').first().getByRole('button', { name: 'Unfollow' }).click();
 await page.waitForSelector('#confirm[open]');

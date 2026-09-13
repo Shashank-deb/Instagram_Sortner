@@ -176,6 +176,73 @@ describe('unfollow queue', () => {
     assert.throws(() => mod.queue.unfollowQueue.enqueue('1001'), /not in your following list/);
   });
 
+  it('sends nothing to Instagram in dry run, and leaves the account untouched', async () => {
+    const sentBefore = mock.unfollowed.length;
+    const requestsBefore = mock.requests.length;
+    const quotaBefore = mod.providers.unfollowLimiter.usage().lastDay;
+
+    mod.queue.unfollowQueue.setDryRun(true);
+    try {
+      const { action } = mod.queue.unfollowQueue.enqueue('1005');
+      assert.equal(action.dryRun, true);
+
+      await waitFor(() => mod.db.getAction(action.id)?.status === 'done');
+
+      assert.equal(mock.unfollowed.length, sentBefore, 'no unfollow may reach Instagram');
+      assert.equal(mock.requests.length, requestsBefore, 'no request at all may reach Instagram');
+      assert.equal(
+        mod.db.getAccount('1005')?.status,
+        'following',
+        'a simulated unfollow must not claim the account was unfollowed',
+      );
+      assert.equal(
+        mod.providers.unfollowLimiter.usage().lastDay,
+        quotaBefore,
+        'a simulated action consumes no real quota',
+      );
+    } finally {
+      mod.queue.unfollowQueue.setDryRun(false);
+    }
+  });
+
+  it('really does send the unfollow once dry run is off again', async () => {
+    const { action } = mod.queue.unfollowQueue.enqueue('1005');
+    assert.equal(action.dryRun, false);
+    await waitFor(() => mod.db.getAction(action.id)?.status === 'done');
+    assert.ok(mock.unfollowed.includes('1005'), 'the real request must go out');
+    assert.equal(mod.db.getAccount('1005')?.status, 'unfollowed');
+  });
+
+  it('cancels a queued action so it never runs', async () => {
+    // Hold the worker so the action cannot start before we cancel it.
+    mod.queue.unfollowQueue.pause('holding so the action cannot start');
+    const { action } = mod.queue.unfollowQueue.enqueue('1006');
+    try {
+      assert.equal(mod.queue.unfollowQueue.cancel(action.id), true);
+      assert.equal(mod.db.getAction(action.id)?.status, 'canceled');
+      // Cancelling twice is not an error; the second call simply does nothing.
+      assert.equal(mod.queue.unfollowQueue.cancel(action.id), false);
+    } finally {
+      mod.queue.unfollowQueue.resume();
+    }
+
+    await mod.ratelimit.sleep(300);
+    assert.equal(mod.db.getAction(action.id)?.status, 'canceled', 'a cancelled action must never run');
+    assert.equal(mod.db.getAccount('1006')?.status, 'following');
+    assert.ok(!mock.unfollowed.includes('1006'));
+  });
+
+  it('rejects a session that cannot sign writes, naming the missing cookie', async () => {
+    const { assertWritableSession } = await import('../src/providers/web.js');
+    assert.throws(
+      () => assertWritableSession({ sessionid: 'abc', dsUserId: '42', csrftoken: '', savedAt: 0 }),
+      /csrftoken/,
+    );
+    assert.doesNotThrow(() =>
+      assertWritableSession({ sessionid: 'abc', dsUserId: '42', csrftoken: 'token', savedAt: 0 }),
+    );
+  });
+
   it('stops the queue and drops pending work when Instagram raises a checkpoint', async () => {
     mock.options.fail = { times: 1, status: 400, body: '{"message":"checkpoint_required"}' };
 

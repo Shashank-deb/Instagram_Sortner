@@ -80,6 +80,21 @@ button { cursor: pointer; }
 .brand .who { font-size: 13px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar .spacer { flex: 1; }
 
+.pill {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  cursor: help;
+}
+.pill--live { background: var(--danger-bg); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.pill--dry  { background: var(--ok-bg); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.pill--read { background: var(--surface-2); color: var(--text-dim); border-color: var(--border); }
+
 .btn {
   border: 1px solid var(--border);
   background: var(--surface);
@@ -265,6 +280,17 @@ button { cursor: pointer; }
 .tag--pending { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
 .tag--done { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
 .tag--failed { background: var(--danger-bg); color: var(--danger); border-color: transparent; }
+
+.pending-cell { display: flex; align-items: center; gap: 6px; }
+.pending-cell .btn { color: var(--text-dim); padding: 4px 7px; }
+.pending-cell .btn:hover:not(:disabled) { color: var(--danger); background: var(--danger-bg); }
+
+.toggle { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.toggle input { width: 18px; height: 18px; margin: 1px 0 0; flex: none; accent-color: var(--accent); }
+.toggle b { display: block; font-size: 14px; }
+.toggle small { color: var(--text-dim); font-size: 12px; }
+#dry-run-note { margin: 8px 0 0; }
+#dry-run-note small { color: var(--text-dim); font-size: 12px; }
 
 .empty, .loading {
   text-align: center;

@@ -16,6 +16,7 @@
         <h1>Instagram Sortner</h1>
         <span class="who" id="who"></span>
       </div>
+      <span class="pill pill--read" id="mode" title="">Read-only</span>
       <div class="spacer"></div>
       <button class="btn" id="btn-settings" type="button">Settings</button>
       <button class="btn btn--primary" id="btn-sync" type="button">Sync</button>
@@ -74,7 +75,7 @@
     <div class="dialog__body">
       <h2 id="confirm-title">Unfollow?</h2>
       <p id="confirm-text"></p>
-      <p><small>This queues a real unfollow on your Instagram account. It is rate-limited and runs one at a time.</small></p>
+      <p><small id="confirm-note"></small></p>
     </div>
     <div class="dialog__actions">
       <button class="btn" type="button" data-close>Cancel</button>
@@ -118,6 +119,18 @@
         <h3>Import data export</h3>
         <p>Instagram → Settings → Accounts Center → Your information and permissions → Download your information (choose <b>JSON</b>). Import the .zip here to get follow dates with zero API calls.</p>
         <input id="file" type="file" accept=".zip,.json,.html" />
+      </div>
+
+      <div class="section">
+        <h3>Safety</h3>
+        <label class="toggle">
+          <input type="checkbox" id="dry-run" />
+          <span>
+            <b>Dry run</b>
+            <small>Unfollow buttons record what would happen and send nothing to Instagram.</small>
+          </span>
+        </label>
+        <p id="dry-run-note"><small></small></p>
       </div>
 
       <div class="section">

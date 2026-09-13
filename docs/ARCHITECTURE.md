@@ -48,6 +48,12 @@ Concurrency here buys nothing and costs the account. The worker claims one actio
 - N consecutive failures trip a circuit breaker requiring a manual resume.
 - Actions left `running` by a crashed process go back to `queued` at boot, never silently dropped or silently repeated.
 
+### Dry run is a property of the action, not of the click
+
+The `dry_run` flag is written onto the action row when it is queued, not read from global state when it runs. Flipping the toggle mid-queue therefore cannot retroactively turn a simulated action into a real one, or vice versa: each action executes under the mode it was created in.
+
+A simulated action deliberately leaves the account as `following` and consumes no rate-limit quota — no request was made, so charging one would corrupt the ledger the limiter depends on. `DRY_RUN` in the environment sets `dryRunLocked`, which `setDryRun` refuses to override, so the safety floor cannot be lifted from the browser.
+
 ### Confirmation is checked server-side
 
 `POST /api/unfollow/:pk` requires the client to echo the username it displayed. If the row shifted between render and click, the server refuses. A client-side `confirm()` alone cannot make that guarantee.

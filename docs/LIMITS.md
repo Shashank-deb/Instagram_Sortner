@@ -82,13 +82,28 @@ This is why the app merges both sources: import the export once for follow dates
 - The server binds to `127.0.0.1` by default. **Do not expose it.** Anyone who reaches the port controls your Instagram account. If you must bind elsewhere, set `APP_TOKEN` — the app warns loudly if you don't.
 - Avatars are fetched server-side, so Instagram's CDN never sees your browser, and the proxy refuses any host that is not `*.cdninstagram.com` / `*.fbcdn.net`.
 
-## 5. Deliberate omissions
+## 5. Why an unfollow can fail even with a valid session
+
+Two things bite people, and the app now handles both explicitly:
+
+- **No `csrftoken`.** Reads work fine without it, writes never do — Instagram answers `POST /friendships/destroy/` with a bare 403. That looks exactly like an expired session, so the app refuses to store a session without one and names the missing cookie up front.
+- **The `x-ig-www-claim` token.** Instagram issues it via the `x-ig-set-www-claim` response header and expects it echoed back on authenticated calls. Requests that omit it are tolerated for a while and then start returning 403 — again indistinguishable from a dead session. The client captures and replays it.
+
+If unfollowing appears to do nothing, check the header pill first: **Read-only** and **Dry run** both send nothing by design.
+
+## 6. Dry run
+
+`DRY_RUN=true`, or **Settings → Safety**, makes every Unfollow button record what it *would* do and send nothing. The account is deliberately left as `following` — local state never claims something that did not happen — and the action consumes no rate-limit quota, because no request is made.
+
+Set in the environment, it is a floor rather than a default: nothing reachable from the browser can switch it off. Use it to explore live data (counts, avatars, who doesn't follow back) with no possibility of touching your account.
+
+## 7. Deliberate omissions
 
 - **No bulk unfollow.** Selecting 400 accounts and hitting "unfollow all" is the single most reliable way to get action-blocked. One at a time, through a confirmation, through a rate-limited queue.
 - **No follower-growth tooling**, no follow-back automation, no scheduling. Those are what get accounts banned.
 - **No credential storage**, ever.
 
-## 6. Most practical recommendation
+## 8. Most practical recommendation
 
 1. **Start with the export.** Import it, use the dashboard read-only. For "who am I following and when did I follow them", this is complete, free and risk-free.
 2. **Add a session only when you actually want to unfollow.** Log in through the browser window.

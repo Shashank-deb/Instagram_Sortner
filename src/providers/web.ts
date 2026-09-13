@@ -11,6 +11,8 @@ const log = createLogger('web');
 const ORIGIN = config.igBaseUrl;
 /** The public web app's own client id. Sent by instagram.com on every XHR. */
 const IG_APP_ID = '936619743392459';
+/** Sent by instagram.com's web client on every XHR; some endpoints check for it. */
+const ASBD_ID = '129477';
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) ' +
   'Chrome/131.0.0.0 Safari/537.36';
@@ -53,12 +55,20 @@ export class WebProvider implements Provider {
   };
 
   private session: IgSession | null = null;
+  /**
+   * Instagram hands out a "www claim" via `x-ig-set-www-claim` and expects it
+   * echoed back as `x-ig-www-claim` on subsequent authenticated calls. Requests
+   * that omit it are accepted for a while and then start coming back 403 -
+   * which looks exactly like a dead session, but is not.
+   */
+  private wwwClaim: string | null = null;
 
   constructor(private readonly reads: RateLimiter) {}
 
   /** Re-read cookies from disk; called after a login refreshes them. */
   refresh(): void {
     this.session = null;
+    this.wwwClaim = null;
   }
 
   private requireSession(): IgSession {
@@ -73,6 +83,10 @@ export class WebProvider implements Provider {
 
   async ensureReady(): Promise<void> {
     this.requireSession();
+  }
+
+  requireWritableSession(): void {
+    assertWritableSession(this.requireSession());
   }
 
   async whoami(): Promise<{ pk: string; username: string } | null> {
@@ -142,6 +156,7 @@ export class WebProvider implements Provider {
   }
 
   async unfollow(pk: string, username: string): Promise<void> {
+    this.requireWritableSession();
     const data = await this.request<{ status?: string; friendship_status?: { following?: boolean } }>(
       `/api/v1/friendships/destroy/${encodeURIComponent(pk)}/`,
       { method: 'POST', body: new URLSearchParams({ user_id: pk }).toString() },
@@ -183,12 +198,14 @@ export class WebProvider implements Provider {
       'X-IG-App-ID': IG_APP_ID,
       'X-Requested-With': 'XMLHttpRequest',
       'X-CSRFToken': session.csrftoken,
+      'X-ASBD-ID': ASBD_ID,
       Referer: `${ORIGIN}/`,
       Origin: ORIGIN,
       Accept: '*/*',
       'Accept-Language': 'en-US,en;q=0.9',
       Cookie: cookieHeader(session),
     };
+    if (this.wwwClaim) headers['X-IG-WWW-Claim'] = this.wwwClaim;
     if (init.body !== undefined) headers['Content-Type'] = 'application/x-www-form-urlencoded';
 
     let res: Response;
@@ -197,6 +214,10 @@ export class WebProvider implements Provider {
     } catch (err) {
       throw new AppError(`Network error talking to Instagram: ${(err as Error).message}`, 502, 'network');
     }
+
+    // Instagram rotates this token; hold on to the newest one it gives us.
+    const issuedClaim = res.headers.get('x-ig-set-www-claim');
+    if (issuedClaim) this.wwwClaim = issuedClaim;
 
     const text = await res.text();
     this.assertHealthy(res, text);
@@ -255,6 +276,20 @@ export class WebProvider implements Provider {
     if (!res.ok) {
       throw new AppError(`Instagram returned HTTP ${res.status}.`, 502, 'upstream');
     }
+  }
+}
+
+/**
+ * Reads survive without a CSRF token; writes never do - Instagram rejects them
+ * with a bare 403. Failing here gives the user something actionable instead of
+ * "log in again" on a session that is perfectly alive.
+ */
+export function assertWritableSession(session: IgSession): void {
+  if (!session.csrftoken) {
+    throw new NotConfiguredError(
+      'This session has no csrftoken, and Instagram rejects every unfollow without one. ' +
+        'Run `npm run login` again, or paste the csrftoken cookie in Settings.',
+    );
   }
 }
 

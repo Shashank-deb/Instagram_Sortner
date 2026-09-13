@@ -52,6 +52,18 @@ unfollowRouter.get('/queue', (_req, res) => {
   });
 });
 
+const dryRunSchema = z.object({ enabled: z.boolean() });
+
+unfollowRouter.post('/queue/dry-run', (req, res, next) => {
+  try {
+    const { enabled } = dryRunSchema.parse(req.body ?? {});
+    unfollowQueue.setDryRun(enabled);
+    res.json({ state: unfollowQueue.state });
+  } catch (err) {
+    next(err);
+  }
+});
+
 unfollowRouter.post('/queue/resume', (_req, res) => {
   unfollowQueue.resume();
   res.json({ state: unfollowQueue.state });

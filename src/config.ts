@@ -12,6 +12,12 @@ function int(name: string, fallback: number): number {
   return n;
 }
 
+function bool(name: string, fallback: boolean): boolean {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase());
+}
+
 function str(name: string, fallback = ''): string {
   const raw = process.env[name];
   return raw === undefined || raw.trim() === '' ? fallback : raw.trim();
@@ -38,6 +44,14 @@ export const config = {
   browserProfileDir: path.join(dataDir, 'browser-profile'),
 
   provider: providerRaw as ProviderName,
+
+  /**
+   * Dry run: everything behaves normally except that the unfollow request is
+   * never sent. Setting it in the environment also *locks* it on, so it cannot
+   * be switched off from the dashboard - a safety floor, not just a default.
+   */
+  dryRun: bool('DRY_RUN', false),
+  dryRunLocked: bool('DRY_RUN', false),
   /**
    * Instagram's origin. Overridable only so the integration tests can point the
    * web provider at a local stand-in; there is no reason to set it in practice.

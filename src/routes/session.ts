@@ -11,7 +11,8 @@ export const sessionRouter = Router();
 const cookieSchema = z.object({
   sessionid: z.string().min(10),
   dsUserId: z.string().regex(/^\d+$/, 'ds_user_id should be a numeric string'),
-  csrftoken: z.string().default(''),
+  // Not optional: Instagram rejects every unfollow that arrives without it.
+  csrftoken: z.string().min(1, 'csrftoken is required - Instagram rejects unfollows without it'),
 });
 
 sessionRouter.get('/session', (_req, res) => {
@@ -21,6 +22,8 @@ sessionRouter.get('/session', (_req, res) => {
     provider: provider.name,
     capabilities: provider.capabilities,
     connected: session !== null,
+    /** A session can be valid for reading and still unable to unfollow. */
+    canWrite: Boolean(session?.sessionid && session?.csrftoken),
     /** Never echo the cookie back; the UI only needs to know one exists. */
     dsUserId: session?.dsUserId ?? null,
     savedAt: session?.savedAt ?? null,

@@ -54,7 +54,9 @@ npm run login          # opens a browser; log in yourself, 2FA included
 
 Then set `PROVIDER=web` in `.env` and restart. The app keeps the cookies that browser session produced; it never sees your password.
 
-No browser on this machine? Paste `sessionid`, `ds_user_id` and `csrftoken` from your own logged-in browser into **Settings → Paste cookies manually**.
+No browser on this machine? Paste `sessionid`, `ds_user_id` **and `csrftoken`** from your own logged-in browser into **Settings → Paste cookies manually**. All three are required: Instagram rejects every unfollow that arrives without a CSRF token, so the app refuses to store a session that cannot sign one rather than letting you discover it as a mystery 403 later.
+
+Until the header pill reads **Live**, no click can change your account.
 
 ## Configuration
 
@@ -69,13 +71,28 @@ Everything is in `.env` ([`.env.example`](.env.example) documents each value). T
 | `UNFOLLOW_MAX_PER_HOUR` | `15` | |
 | `UNFOLLOW_MIN_GAP_MS` / `UNFOLLOW_MAX_GAP_MS` | `25000` / `70000` | Each unfollow waits a random gap in this range, so the cadence is not a metronome. |
 | `CIRCUIT_BREAKER_FAILURES` | `3` | Consecutive failures before the queue stops itself. |
+| `DRY_RUN` | unset | Simulate unfollows and send nothing. Setting it here locks it on. |
 
 Quotas are stored in the database, not in memory, so restarting the app does **not** reset your daily budget.
+
+## Will clicking Unfollow change my real account?
+
+The header always answers this in one word:
+
+| Pill | What a click does |
+| --- | --- |
+| **Read-only** (grey) | Nothing. Archive data; the button is not even rendered, and the API refuses the call. |
+| **Dry run** (green) | Nothing is sent. The action is recorded so you can see what *would* happen, and you stay following them. |
+| **Live** (red) | A real, immediate, permanent unfollow on your Instagram account. |
+
+Dry run is toggled in **Settings → Safety**. Setting `DRY_RUN=true` in `.env` also *locks* it on: it cannot be switched off from the dashboard, so a stray click can never reach your account.
+
+While an action is still `Queued`, each row carries its own **Cancel** button and nothing is sent. Once it flips to `Unfollowing…` it is in flight and cannot be called back.
 
 ## How the unfollow queue behaves
 
 1. Clicking **Unfollow** opens a confirmation naming the account. The UI echoes the username back to the server, which refuses the action if it doesn't match the row — a list that shifted under you can't cost you the wrong account.
-2. The action is persisted as `queued`. One action per account can be in flight.
+2. The action is persisted as `queued`. One action per account can be in flight, and the row offers a **Cancel** button for as long as it stays queued.
 3. A single worker drains the queue **serially**, waiting for a rate-limit slot before each call.
 4. On success the account moves to `unfollowed` and leaves your Following view.
 5. On an Instagram checkpoint or 429, the queue **pauses itself and clears the rest of the queue**, and will not resume until you say so in Settings. Retrying is what turns a warning into a block.

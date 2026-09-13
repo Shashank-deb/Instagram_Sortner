@@ -64,6 +64,8 @@ export interface UnfollowAction {
   executedAt: number | null;
   attempts: number;
   error: string | null;
+  /** True when this action was simulated and never sent to Instagram. */
+  dryRun: boolean;
 }
 
 export interface SyncRun {
