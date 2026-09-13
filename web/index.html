@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Instagram Sortner</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>📋</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <div class="brand">
+        <h1>Instagram Sortner</h1>
+        <span class="who" id="who"></span>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn" id="btn-settings" type="button">Settings</button>
+      <button class="btn btn--primary" id="btn-sync" type="button">Sync</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <div id="banners"></div>
+
+    <section class="stats" id="stats" aria-label="Summary"></section>
+
+    <section class="toolbar" aria-label="Filters">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" stroke-linecap="round" />
+        </svg>
+        <input id="search" type="search" placeholder="Search username or name…" autocomplete="off"
+               spellcheck="false" aria-label="Search accounts" />
+      </div>
+
+      <div class="controls">
+        <div class="chips" role="group" aria-label="Quick filters">
+          <button class="chip" type="button" data-filter="nonFollowers" aria-pressed="false">Doesn't follow back</button>
+          <button class="chip" type="button" data-filter="verified" aria-pressed="false">Verified</button>
+          <button class="chip" type="button" data-filter="private" aria-pressed="false">Private</button>
+        </div>
+
+        <select class="select" id="status" aria-label="Status">
+          <option value="following">Following</option>
+          <option value="unfollowed">Unfollowed</option>
+          <option value="gone">No longer followed</option>
+          <option value="all">All</option>
+        </select>
+
+        <select class="select" id="sort" aria-label="Sort by">
+          <option value="username">Username</option>
+          <option value="full_name">Name</option>
+          <option value="follower_count">Followers</option>
+          <option value="following_count">Following</option>
+          <option value="followed_at">Date followed</option>
+          <option value="first_seen_at">First seen</option>
+        </select>
+
+        <button class="btn btn--sm" id="direction" type="button" aria-label="Toggle sort direction">A→Z</button>
+
+        <span class="result-count" id="count"></span>
+      </div>
+    </section>
+
+    <div class="list" id="list" aria-live="polite"></div>
+    <div class="sentinel" id="sentinel"></div>
+    <div id="list-status"></div>
+  </main>
+
+  <dialog id="confirm">
+    <div class="dialog__body">
+      <h2 id="confirm-title">Unfollow?</h2>
+      <p id="confirm-text"></p>
+      <p><small>This queues a real unfollow on your Instagram account. It is rate-limited and runs one at a time.</small></p>
+    </div>
+    <div class="dialog__actions">
+      <button class="btn" type="button" data-close>Cancel</button>
+      <button class="btn btn--danger" type="button" id="confirm-go">Unfollow</button>
+    </div>
+  </dialog>
+
+  <dialog id="settings" class="drawer">
+    <div class="dialog__body">
+      <h2>Settings</h2>
+
+      <div class="section">
+        <h3>Connection</h3>
+        <div id="conn-info"></div>
+        <div class="controls" style="margin-top:10px">
+          <button class="btn btn--sm" id="btn-login" type="button">Log in via browser</button>
+          <button class="btn btn--sm" id="btn-verify" type="button">Verify session</button>
+          <button class="btn btn--sm btn--danger" id="btn-disconnect" type="button">Disconnect</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Paste cookies manually</h3>
+        <div class="field">
+          <label for="c-sessionid">sessionid</label>
+          <input id="c-sessionid" type="password" autocomplete="off" placeholder="from instagram.com cookies" />
+        </div>
+        <div class="field">
+          <label for="c-dsuser">ds_user_id</label>
+          <input id="c-dsuser" type="text" autocomplete="off" inputmode="numeric" placeholder="numeric id" />
+        </div>
+        <div class="field">
+          <label for="c-csrf">csrftoken</label>
+          <input id="c-csrf" type="text" autocomplete="off" />
+          <small>Stored locally in the app's SQLite file. Never sent anywhere but instagram.com.</small>
+        </div>
+        <button class="btn btn--sm btn--primary" id="btn-save-cookies" type="button">Save cookies</button>
+      </div>
+
+      <div class="section">
+        <h3>Import data export</h3>
+        <p>Instagram → Settings → Accounts Center → Your information and permissions → Download your information (choose <b>JSON</b>). Import the .zip here to get follow dates with zero API calls.</p>
+        <input id="file" type="file" accept=".zip,.json,.html" />
+      </div>
+
+      <div class="section">
+        <h3>Unfollow queue</h3>
+        <div id="queue-info"></div>
+        <div class="controls" style="margin-top:10px">
+          <button class="btn btn--sm" id="btn-queue-pause" type="button">Pause</button>
+          <button class="btn btn--sm" id="btn-queue-resume" type="button">Resume</button>
+          <button class="btn btn--sm btn--danger" id="btn-queue-clear" type="button">Clear queue</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>App token</h3>
+        <div class="field">
+          <label for="c-token">x-app-token</label>
+          <input id="c-token" type="password" autocomplete="off" placeholder="only if APP_TOKEN is set" />
+          <small>Kept in this browser's localStorage.</small>
+        </div>
+        <button class="btn btn--sm" id="btn-save-token" type="button">Save token</button>
+      </div>
+    </div>
+    <div class="dialog__actions">
+      <button class="btn" type="button" data-close>Close</button>
+    </div>
+  </dialog>
+
+  <div class="toasts" id="toasts" aria-live="assertive"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
