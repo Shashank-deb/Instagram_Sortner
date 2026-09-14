@@ -584,6 +584,23 @@ export function takeArchivePlaceholder(username: string): number | null {
   return row.followed_at;
 }
 
+/**
+ * Wipe every stored account and action. Used by `npm run sample -- --clear` to
+ * remove demo data; the session and rate-limit ledger are deliberately left
+ * alone, since neither is part of what the sample loaded.
+ */
+export function clearAllAccounts(): { accounts: number; actions: number } {
+  const accounts = db.prepare('SELECT COUNT(*) AS n FROM accounts').get() as { n: number };
+  const actions = db.prepare('SELECT COUNT(*) AS n FROM actions').get() as { n: number };
+  db.transaction(() => {
+    db.prepare('DELETE FROM accounts').run();
+    db.prepare('DELETE FROM actions').run();
+    db.prepare('DELETE FROM sync_runs').run();
+    delMetaStmt.run('last_sync_at');
+  })();
+  return { accounts: accounts.n, actions: actions.n };
+}
+
 export function countArchivePlaceholders(): number {
   return db
     .prepare<[], { n: number }>(`SELECT COUNT(*) AS n FROM accounts WHERE pk LIKE 'username:%'`)

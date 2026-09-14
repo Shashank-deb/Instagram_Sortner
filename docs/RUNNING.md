@@ -106,6 +106,56 @@ The "No accounts stored yet" warning is expected at this stage. Stage 3 fixes it
 
 ---
 
+## Stage 2½ — Try it with sample data (optional, 10 seconds)
+
+Instagram's export takes minutes to a couple of days to arrive. If you just want to see the dashboard working now:
+
+```bash
+npm run sample
+```
+
+**Expected:**
+
+```
+Loaded the demo export: 78 following, 42 followers.
+  78 added, 0 updated, 0 marked no longer followed.
+  39 of them do not follow you back.
+```
+
+Reload the dashboard and you have 78 accounts to play with.
+
+### ✅ Check: everything responds
+
+| Try this | Expected |
+| --- | --- |
+| Type `the` in search | Narrows to 9 accounts |
+| Click **Doesn't follow back** | 39 accounts |
+| Sort by **Date followed** | Newest follows first; click `High→Low` to flip |
+| Scroll to the bottom | Rows keep loading past 60, ending at 78 |
+
+The accounts are invented — no real person or organisation. The files live in `samples/` in the export's exact format, so this runs through the same importer a real export does; it is not a special-cased demo mode.
+
+Follower counts, avatars and verified badges show as `—`, exactly as they would with a real export: Instagram's export does not contain them. Those appear only after a live sync (Stage 4).
+
+**When you're done:**
+
+```bash
+npm run sample -- --clear
+```
+
+If the database already holds accounts, `npm run sample` refuses rather than mixing demo data into real data. To keep them apart entirely, point it somewhere else:
+
+```powershell
+$env:DATA_DIR="./data-demo"; npm run sample     # PowerShell
+```
+```bash
+DATA_DIR=./data-demo npm run sample             # macOS / Linux
+```
+
+...and start the app the same way. Delete the folder when you're finished.
+
+---
+
 ## Stage 3 — Load your real following list
 
 This is the zero-risk path: a file Instagram gives you, read locally.

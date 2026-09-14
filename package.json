@@ -13,6 +13,7 @@
     "build": "tsc -p tsconfig.json && node -e \"require('node:fs').copyFileSync('src/db/schema.sql','dist/db/schema.sql')\"",
     "start": "node dist/index.js",
     "doctor": "tsx src/cli/doctor.ts",
+    "sample": "tsx src/cli/load-sample.ts",
     "login": "tsx src/session/login-cli.ts",
     "import": "tsx src/cli/import-archive.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",

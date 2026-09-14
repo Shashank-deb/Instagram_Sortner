@@ -38,6 +38,13 @@ npm run dev            # http://127.0.0.1:4317
 
 No `.env` is needed to start: the default is read-only archive mode, which cannot contact Instagram at all.
 
+Want to see it working before your Instagram export arrives?
+
+```bash
+npm run sample          # loads 78 invented accounts, then reload the dashboard
+npm run sample -- --clear
+```
+
 **Not sure whether it's working?** `npm run doctor` checks your setup and prints what works, what doesn't, and the command to fix it. For a stage-by-stage walkthrough with a verification step after each one, see **[`docs/RUNNING.md`](docs/RUNNING.md)**.
 
 ### Read-only, zero risk (recommended first)
@@ -106,6 +113,7 @@ While an action is still `Queued`, each row carries its own **Cancel** button an
 
 ```bash
 npm run dev            # dev server with reload
+npm run sample         # load bundled demo data (--clear to remove it)
 npm run doctor         # is it working? what is missing?
 npm run doctor -- --verify   # ...and does Instagram still accept the session?
 npm run build && npm start
@@ -121,6 +129,7 @@ npm run typecheck
 ## Architecture
 
 ```
+samples/             a demo export in Instagram's own format, for trying it out
 web/                 dashboard (no build step, no framework, no dependencies)
 src/
   providers/         archive (data export) and web (private endpoints) behind one interface
