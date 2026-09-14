@@ -266,6 +266,7 @@ Changed your mind mid-way? Click **Cancel** on the row while it still says **Que
 | "Daily unfollow cap reached" | You hit 60 today | Wait. This limit is what protects the account |
 | `EADDRINUSE` on startup | Port 4317 is taken | Set `PORT=4318` in `.env` |
 | `npm test` fails on SQLite | Native module mismatch | `npm rebuild better-sqlite3` |
+| `EBUSY: resource busy or locked` during test cleanup (Windows) | Old version; the database was still open when the tests tried to delete their temp folder | `git pull` — the suite now closes it first |
 | `Could not find ...\test\*.test.ts` | Old version; the shell was expected to expand the glob | `git pull` — the runner now discovers test files itself |
 | Blank page in the browser | Server not running | Check the terminal; run `npm run doctor` |
 

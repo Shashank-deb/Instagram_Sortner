@@ -56,7 +56,11 @@ before(async () => {
 
 after(async () => {
   await mock.close();
-  fs.rmSync(dataDir, { recursive: true, force: true });
+  // Order matters, and matters most on Windows: the worker polls the database,
+  // and a file with an open handle cannot be deleted there at all.
+  await mod.queue.unfollowQueue.stop();
+  mod.db.closeDatabase();
+  fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 async function waitFor(predicate: () => boolean, timeoutMs = 8000): Promise<void> {

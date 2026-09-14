@@ -15,7 +15,7 @@ before(async () => {
   ({ ArchiveProvider } = await import('../src/providers/archive.js'));
 });
 
-after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
+after(() => fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
 
 function entry(username: string, timestamp: number) {
   return { title: '', string_list_data: [{ href: `https://www.instagram.com/${username}`, value: username, timestamp }] };

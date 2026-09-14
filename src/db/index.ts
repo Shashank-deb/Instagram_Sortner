@@ -52,6 +52,16 @@ export function now(): number {
   return Math.floor(Date.now() / 1000);
 }
 
+/**
+ * Release the database file. Windows refuses to delete a file that still has an
+ * open handle, so anything that creates a throwaway database - the tests, above
+ * all - has to close it before cleaning up. Stop the unfollow queue first: it
+ * polls the database once a second and would throw on a closed handle.
+ */
+export function closeDatabase(): void {
+  if (db.open) db.close();
+}
+
 // --- meta -----------------------------------------------------------------
 
 const getMetaStmt = db.prepare<[string], { value: string }>('SELECT value FROM meta WHERE key = ?');

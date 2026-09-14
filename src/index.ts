@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { createLogger } from './core/logger.js';
+import { closeDatabase } from './db/index.js';
 import { startRateEventPruner } from './core/ratelimit.js';
 import { createApiRouter } from './routes/index.js';
 import { unfollowQueue } from './services/unfollow.js';
@@ -43,7 +44,13 @@ const server = app.listen(config.port, config.host, () => {
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     log.info(`${signal} received, shutting down`);
-    server.close(() => process.exit(0));
+    server.close(async () => {
+      // Stop the worker before releasing the database, and release it before
+      // exiting: on Windows a lingering handle keeps the file locked.
+      await unfollowQueue.stop();
+      closeDatabase();
+      process.exit(0);
+    });
     setTimeout(() => process.exit(0), 3000).unref();
   });
 }

@@ -1,7 +1,6 @@
 import { config } from '../config.js';
 import { AppError, ProviderUnsupportedError, ThrottledError } from '../core/errors.js';
 import { createLogger } from '../core/logger.js';
-import { sleep } from '../core/ratelimit.js';
 import {
   cancelAction,
   cancelAllQueued,
@@ -49,12 +48,31 @@ class UnfollowQueue {
   private current: { id: number; username: string } | null = null;
   private consecutiveFailures = 0;
   private loopHandle: Promise<void> | null = null;
+  private stopped = false;
   private dryRun = config.dryRun;
+  private idleTimer: NodeJS.Timeout | null = null;
+  private idleResolve: (() => void) | null = null;
 
   start(): void {
     const recovered = recoverStaleActions();
     if (recovered > 0) log.warn(`requeued ${recovered} action(s) left running by a previous process`);
+    this.stopped = false;
     if (!this.loopHandle) this.loopHandle = this.loop();
+  }
+
+  /**
+   * Stop the worker for good. Needed before closing the database: the loop
+   * queries it once a second, and on Windows an open handle also makes the file
+   * undeletable, so tests cannot clean up after themselves.
+   */
+  async stop(): Promise<void> {
+    this.stopped = true;
+    this.wake();
+    const handle = this.loopHandle;
+    this.loopHandle = null;
+    if (handle) await handle;
+    this.running = false;
+    this.current = null;
   }
 
   get state(): QueueState {
@@ -100,6 +118,7 @@ class UnfollowQueue {
     this.pausedReason = null;
     this.consecutiveFailures = 0;
     unfollowLimiter.clearCooldown();
+    this.wake();
     log.info('queue resumed');
   }
 
@@ -147,10 +166,36 @@ class UnfollowQueue {
     return listActions(['done', 'failed', 'canceled'], limit);
   }
 
+  /**
+   * Sleep between polls, interruptibly.
+   *
+   * The timer is unref'd so an idle queue never keeps the process alive on its
+   * own - but that means it may never fire, so `stop()` cannot simply wait for
+   * it. `wake()` resolves the pending sleep immediately instead.
+   */
+  private idle(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const done = () => {
+        this.idleTimer = null;
+        this.idleResolve = null;
+        resolve();
+      };
+      this.idleResolve = done;
+      this.idleTimer = setTimeout(done, ms);
+      this.idleTimer.unref();
+    });
+  }
+
+  private wake(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleResolve?.();
+  }
+
   private async loop(): Promise<void> {
     for (;;) {
+      if (this.stopped) return;
       if (this.paused) {
-        await sleep(1000, { unref: true });
+        await this.idle(1000);
         continue;
       }
 
@@ -158,8 +203,13 @@ class UnfollowQueue {
       if (!action) {
         this.running = false;
         this.current = null;
-        await sleep(1000, { unref: true });
+        await this.idle(1000);
         continue;
+      }
+
+      if (this.stopped) {
+        releaseAction(action.id);
+        return;
       }
 
       this.running = true;
@@ -169,6 +219,11 @@ class UnfollowQueue {
         // Wait for a slot first, then re-check we were not paused during the wait.
         // A simulated action makes no request, so it consumes no quota.
         if (!action.dryRun) await this.waitForSlot();
+        if (this.stopped) {
+          releaseAction(action.id);
+          this.current = null;
+          return;
+        }
         if (this.paused) {
           releaseAction(action.id);
           this.current = null;
@@ -214,13 +269,15 @@ class UnfollowQueue {
 
   private async waitForSlot(): Promise<void> {
     for (;;) {
-      if (this.paused) return;
+      // Waiting out a daily cap can take hours; a pause or a stop must not have
+      // to wait for it.
+      if (this.paused || this.stopped) return;
       const verdict = unfollowLimiter.check();
       if (verdict.allowed) {
         unfollowLimiter.consume();
         return;
       }
-      await sleep(Math.min(verdict.waitMs, 1000), { unref: true });
+      await this.idle(Math.min(verdict.waitMs, 1000));
     }
   }
 }
