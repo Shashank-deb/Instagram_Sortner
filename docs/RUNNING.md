@@ -72,7 +72,11 @@ Open **http://127.0.0.1:4317** in a browser.
 
 ### ✅ Check: the dashboard loads
 
-You should see the header with a grey **READ-ONLY** pill, four zeroed stat cards, the search bar and filters, and an empty list saying *"Nothing here yet"*. That empty list is correct — you have not loaded any data yet.
+You should see the header with a grey **READ-ONLY** pill, four zeroed stat cards, the search bar and filters, and a panel saying **"No list loaded yet"**. That is correct — you have not loaded any data yet.
+
+> **The search box does not look accounts up on Instagram.** It filters the list you have already loaded. Typing your own username — or anyone's — into an empty dashboard returns nothing, because there is nothing loaded to filter. Stage 3 loads the list; search becomes useful after that.
+>
+> Nothing in this app can fetch a following list by username. Instagram has no API for it, and its private endpoints require you to be logged in as that account. That is why the only two sources are your own data export and your own session.
 
 ### ✅ Check: doctor agrees
 
@@ -176,7 +180,7 @@ Session captured. You can close the browser window.
 Session stored for @yourname.
 ```
 
-> **`npm run login` says Playwright is not installed?** Run `npx playwright install chromium` once, then retry. Or skip it: copy `sessionid`, `ds_user_id` and `csrftoken` from your own logged-in browser's cookies into **Settings → Paste cookies manually**. All three are required.
+> **`npm run login` fails with "Executable doesn't exist" or "Playwright is not installed"?** Run `npx playwright install chromium` once in the project folder, then retry. `npm run doctor` flags this before you hit it. Or skip it: copy `sessionid`, `ds_user_id` and `csrftoken` from your own logged-in browser's cookies into **Settings → Paste cookies manually**. All three are required.
 
 ### ✅ Check: Instagram accepts the session
 
@@ -269,6 +273,8 @@ Changed your mind mid-way? Click **Cancel** on the row while it still says **Que
 | `EBUSY: resource busy or locked` during test cleanup (Windows) | Old version; the database was still open when the tests tried to delete their temp folder | `git pull` — the suite now closes it first |
 | `Could not find ...\test\*.test.ts` | Old version; the shell was expected to expand the glob | `git pull` — the runner now discovers test files itself |
 | Blank page in the browser | Server not running | Check the terminal; run `npm run doctor` |
+| Typed a username in search, nothing appears | Search filters your loaded list; it does not look accounts up on Instagram | Load your list first (Stage 3) |
+| `Executable doesn't exist at ...chrome-win64` when logging in | Playwright is installed, its browser is not | `npx playwright install chromium` |
 
 When something is wrong and it isn't in this table, run `npm run doctor` — it names the problem and the command that fixes it.
 

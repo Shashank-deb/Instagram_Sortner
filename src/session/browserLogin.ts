@@ -72,11 +72,16 @@ class BrowserLogin {
     const chromium = await loadPlaywright();
     fs.mkdirSync(config.browserProfileDir, { recursive: true });
 
-    const context = await chromium.launchPersistentContext(config.browserProfileDir, {
-      headless: false,
-      viewport: { width: 1180, height: 900 },
-      args: ['--disable-blink-features=AutomationControlled'],
-    });
+    let context: IgContext;
+    try {
+      context = await chromium.launchPersistentContext(config.browserProfileDir, {
+        headless: false,
+        viewport: { width: 1180, height: 900 },
+        args: ['--disable-blink-features=AutomationControlled'],
+      });
+    } catch (err) {
+      throw describeLaunchFailure(err as Error);
+    }
 
     try {
       const page = context.pages()[0] ?? (await context.newPage());
@@ -156,6 +161,36 @@ interface IgContext {
 
 interface PlaywrightChromium {
   launchPersistentContext(dir: string, options: Record<string, unknown>): Promise<IgContext>;
+}
+
+/**
+ * Playwright reports a missing browser with a multi-line ASCII banner that is
+ * unreadable once it reaches the dashboard. Translate the cases we can act on
+ * into a single sentence naming the command to run.
+ */
+function describeLaunchFailure(err: Error): AppError {
+  const message = err.message ?? '';
+
+  if (/Executable doesn't exist|playwright install/i.test(message)) {
+    return new AppError(
+      'Playwright is installed but its Chromium browser is not. Run this once, in the project folder: ' +
+        'npx playwright install chromium',
+      501,
+      'missing_browser',
+    );
+  }
+
+  if (/Missing X server|no display|DISPLAY/i.test(message)) {
+    return new AppError(
+      'No desktop session is available, so a browser window cannot be shown. Log in on a machine with a ' +
+        'desktop, then paste the cookies in Settings.',
+      501,
+      'headless_host',
+    );
+  }
+
+  // Keep the first line only: the rest is Playwright's banner art.
+  return new AppError(`Could not launch the browser: ${message.split('\n')[0]}`, 500, 'launch_failed');
 }
 
 function idle(): LoginState {

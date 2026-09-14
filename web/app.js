@@ -27,6 +27,8 @@ const state = {
   generation: 0,
   capabilities: null,
   queue: null,
+  /** Does the database hold any account at all, in any status? */
+  libraryEmpty: true,
 };
 
 // --- transport -------------------------------------------------------------
@@ -361,16 +363,11 @@ async function loadPage({ reset = false } = {}) {
 
 function renderListStatus() {
   if (state.total === 0) {
-    $('#list-status').replaceChildren(
-      el('div', { className: 'empty' }, [
-        el('h2', { textContent: 'Nothing here yet' }),
-        el('p', {
-          textContent: state.search
-            ? 'No account matches that search.'
-            : 'Import your data export or run a sync to populate the list.',
-        }),
-      ]),
-    );
+    // An empty library and a search that matched nothing look identical from
+    // the query's point of view, but they need completely different advice.
+    // Saying "no account matches" when nothing has been loaded reads as "that
+    // account does not exist", which is badly misleading.
+    $('#list-status').replaceChildren(state.libraryEmpty ? getStartedPanel() : noMatchPanel());
     return;
   }
   $('#list-status').replaceChildren(
@@ -378,6 +375,71 @@ function renderListStatus() {
       ? el('div', { className: 'loading', textContent: `End of list — ${plain.format(state.total)} shown` })
       : el('div', { className: 'loading', textContent: 'Loading more…' }),
   );
+}
+
+/**
+ * Shown when the database holds nothing at all. This app does not look accounts
+ * up on Instagram - it lists accounts *you* follow, from a source you provide -
+ * so the only useful thing to say here is how to provide one.
+ */
+function getStartedPanel() {
+  const canSync = state.capabilities?.liveSync;
+  return el('div', { className: 'empty' }, [
+    el('h2', { textContent: 'No list loaded yet' }),
+    el('p', {
+      textContent:
+        'This dashboard shows the accounts you follow, read from your own Instagram data. ' +
+        'It cannot look up an account by typing its name — there is nothing to search until a list is loaded.',
+    }),
+    el('div', { className: 'empty__actions' }, [
+      el('button', {
+        className: 'btn btn--primary',
+        type: 'button',
+        textContent: 'Import a data export',
+        onclick: () => {
+          $('#settings').showModal();
+          $('#file').scrollIntoView({ block: 'center' });
+        },
+      }),
+      canSync
+        ? el('button', { className: 'btn', type: 'button', textContent: 'Sync from Instagram', onclick: startSync })
+        : el('button', {
+            className: 'btn',
+            type: 'button',
+            textContent: 'Connect a session',
+            onclick: () => $('#settings').showModal(),
+          }),
+    ]),
+    el('p', {
+      className: 'empty__hint',
+      textContent: canSync
+        ? 'The export is the only source that knows when you followed each account.'
+        : 'Instagram → Settings → Accounts Centre → Your information and permissions → Download your information (JSON).',
+    }),
+  ]);
+}
+
+function noMatchPanel() {
+  return el('div', { className: 'empty' }, [
+    el('h2', { textContent: 'No match' }),
+    el('p', { textContent: `Nothing in your list matches “${state.search}”. Check the filters above, or clear the search.` }),
+    el('div', { className: 'empty__actions' }, [
+      el('button', {
+        className: 'btn',
+        type: 'button',
+        textContent: 'Clear search and filters',
+        onclick: () => {
+          $('#search').value = '';
+          state.search = '';
+          for (const key of Object.keys(state.filters)) state.filters[key] = false;
+          for (const chip of document.querySelectorAll('.chip')) chip.setAttribute('aria-pressed', 'false');
+          $('#status').value = 'following';
+          state.status = 'following';
+          loadPage({ reset: true });
+        },
+      }),
+    ]),
+  ]);
 }
 
 // --- status polling --------------------------------------------------------
@@ -391,6 +453,15 @@ async function refreshStatus() {
     const status = await api('/status');
     state.capabilities = status.capabilities;
     state.queue = status.queue;
+    const stats = status.stats ?? {};
+    state.libraryEmpty = (stats.following ?? 0) + (stats.unfollowed ?? 0) + (stats.gone ?? 0) === 0;
+    $('#search').placeholder = state.libraryEmpty
+      ? 'Nothing to search yet — load your list first'
+      : 'Search your list by username or name…';
+    // The first list render can beat the first status poll, so an empty result
+    // may have been explained with the wrong panel. Re-render it now that the
+    // real answer is known.
+    if (state.total === 0 && !state.loading) renderListStatus();
     renderStats(status.stats);
     renderBanners(status);
     renderQueueInfo(status.queue);

@@ -10,7 +10,7 @@ Runs entirely on your own machine. No hosted service, no third party ever sees y
 
 - **Complete list** of everyone you follow, stored locally in SQLite and kept across runs.
 - **Details per account** — username, name, avatar, private/verified, follower and following counts, whether they follow you back, and **the date you followed them**.
-- **Search, filter, sort** — instant search over username and name; filters for "doesn't follow back", verified and private; sorting by username, name, follower count, following count, follow date or first seen.
+- **Search, filter, sort** — instant search over username and name; filters for "doesn't follow back", verified and private; sorting by username, name, follower count, following count, follow date or first seen. Search filters the list you have loaded; it does not look accounts up on Instagram, and no API allows that.
 - **Unfollow** next to every row, behind a confirmation dialog, executed through a serial, persistent, rate-limited queue.
 - **History**, not just state: accounts you unfollowed and accounts that quietly vanished from your list are kept and filterable, never deleted.
 - **Works on a phone**, one hand, no horizontal scrolling. Light and dark follow the system.

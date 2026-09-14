@@ -148,6 +148,30 @@ if (config.dryRun) {
   line('warn', 'Dry run is off', 'Confirmed unfollows are real and permanent. Toggle it in Settings, or set DRY_RUN=true in .env.');
 }
 
+// --- 4b. browser login prerequisites --------------------------------------
+
+// Only relevant if you intend to log in through a browser; `npm run login`
+// fails with a wall of ASCII art when the browser binary is absent.
+try {
+  const { chromium } = (await import('playwright')) as { chromium: { executablePath(): string } };
+  const exe = chromium.executablePath();
+  if (fs.existsSync(exe)) {
+    line('ok', 'Browser login available');
+  } else {
+    line(
+      config.provider === 'web' ? 'warn' : 'info',
+      'Playwright is installed but its Chromium is not',
+      '`npm run login` will fail until you run: npx playwright install chromium',
+    );
+  }
+} catch {
+  line(
+    config.provider === 'web' ? 'warn' : 'info',
+    'Playwright is not installed',
+    'Browser login is unavailable. Either run `npm install`, or paste cookies in Settings instead.',
+  );
+}
+
 // --- 5. safety budget ------------------------------------------------------
 
 heading('Rate limits');
