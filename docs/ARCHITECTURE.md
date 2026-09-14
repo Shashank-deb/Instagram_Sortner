@@ -68,6 +68,8 @@ Instagram's avatar URLs are signed, expire within days, and are served by a CDN 
 
 ## Testing
 
+Scripts must run in PowerShell and cmd as well as a Unix shell, so nothing may rely on the shell for glob expansion or PATH resolution of `.cmd` shims. `test/run.mjs` discovers the test files itself and launches them with `process.execPath`; the end-to-end harness starts the server the same way rather than through `npx`.
+
 - `test/integration.test.ts` runs the real client, sync service and unfollow queue against `test/mock-instagram.ts`, covering pagination, follow-back computation, departures, a completed unfollow, duplicate rejection, and checkpoint handling.
 - `test/archive.test.ts` covers every export shape, including the failure case.
 - `test/e2e.mjs` starts the real server against the mock and drives the real dashboard in a real browser: sync, unfollow with confirmation, the list refreshing itself, and cancelling sending nothing.

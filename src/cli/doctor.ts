@@ -78,12 +78,20 @@ try {
   line('fail', 'Data directory is not writable', config.dataDir);
 }
 
-const mode = (fs.statSync(config.dbPath).mode & 0o777).toString(8);
-line(
-  mode === '600' ? 'ok' : 'warn',
-  `Database file permissions: ${mode}`,
-  mode === '600' ? 'Only your user can read the stored session.' : 'Expected 600. The database holds session cookies.',
-);
+if (process.platform === 'win32') {
+  // Windows uses ACLs, not POSIX mode bits; chmod there is a near no-op, so
+  // reporting "expected 600" would be a warning nobody can act on.
+  line('info', 'File permissions not checked on Windows', 'The database holds session cookies - keep this folder private.');
+} else {
+  const mode = (fs.statSync(config.dbPath).mode & 0o777).toString(8);
+  line(
+    mode === '600' ? 'ok' : 'warn',
+    `Database file permissions: ${mode}`,
+    mode === '600'
+      ? 'Only your user can read the stored session.'
+      : 'Expected 600. The database holds session cookies.',
+  );
+}
 
 // --- 3. data ---------------------------------------------------------------
 

@@ -16,7 +16,7 @@
     "login": "tsx src/session/login-cli.ts",
     "import": "tsx src/cli/import-archive.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
-    "test": "node --import tsx --test test/*.test.ts",
+    "test": "node test/run.mjs",
     "test:e2e": "node test/e2e.mjs"
   },
   "dependencies": {

@@ -53,7 +53,9 @@ async function freePort() {
 const appPort = await freePort();
 const appUrl = `http://127.0.0.1:${appPort}`;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sortner-e2e-'));
-const app = spawn('npx', ['tsx', 'src/index.ts'], {
+// process.execPath + the tsx loader, rather than `npx`: on Windows npx is a
+// .cmd file that spawn() cannot execute without a shell.
+const app = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
   env: { ...process.env, DATA_DIR: dataDir, PORT: String(appPort), PROVIDER: 'web', IG_BASE_URL: igUrl,
     IG_SESSIONID: 'x'.repeat(20), IG_DS_USER_ID: '99', IG_CSRFTOKEN: 'csrf',
     READ_MIN_GAP_MS: '0', UNFOLLOW_MIN_GAP_MS: '0', UNFOLLOW_MAX_GAP_MS: '0', LOG_LEVEL: 'error' },

@@ -16,6 +16,8 @@ At any point, `npm run doctor` inspects your setup and prints what works, what d
 
 If `node -v` is missing or too old, install from [nodejs.org](https://nodejs.org) and reopen your terminal.
 
+**Windows, macOS and Linux are all supported.** Every `npm run …` command below works the same in PowerShell, cmd and a Unix shell. Paths in the examples use forward slashes; Windows accepts those too, so you can paste them as-is.
+
 ---
 
 ## Stage 1 — Install
@@ -46,6 +48,8 @@ npm test
 These run the real sync, queue and rate limiter against a local stand-in for instagram.com. Nothing touches a real account. If they pass, the code is sound on your machine and any later problem is configuration, not code.
 
 > **`npm test` fails on a SQLite error?** Run `npm rebuild better-sqlite3`. That rebuilds the native module against your exact Node version.
+>
+> **Seeing `Could not find ...\test\*.test.ts`?** You are on a version from before this was fixed. `git pull` and run `npm test` again. The old script relied on the shell expanding `test/*.test.ts`, which PowerShell and cmd do not do.
 
 ---
 
@@ -262,6 +266,7 @@ Changed your mind mid-way? Click **Cancel** on the row while it still says **Que
 | "Daily unfollow cap reached" | You hit 60 today | Wait. This limit is what protects the account |
 | `EADDRINUSE` on startup | Port 4317 is taken | Set `PORT=4318` in `.env` |
 | `npm test` fails on SQLite | Native module mismatch | `npm rebuild better-sqlite3` |
+| `Could not find ...\test\*.test.ts` | Old version; the shell was expected to expand the glob | `git pull` — the runner now discovers test files itself |
 | Blank page in the browser | Server not running | Check the terminal; run `npm run doctor` |
 
 When something is wrong and it isn't in this table, run `npm run doctor` — it names the problem and the command that fixes it.
