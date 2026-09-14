@@ -32,9 +32,13 @@ They merge: import the export once for follow dates, then sync live for everythi
 
 ```bash
 npm install
-cp .env.example .env
+npm test               # 20 tests, all against a local stand-in for Instagram
 npm run dev            # http://127.0.0.1:4317
 ```
+
+No `.env` is needed to start: the default is read-only archive mode, which cannot contact Instagram at all.
+
+**Not sure whether it's working?** `npm run doctor` checks your setup and prints what works, what doesn't, and the command to fix it. For a stage-by-stage walkthrough with a verification step after each one, see **[`docs/RUNNING.md`](docs/RUNNING.md)**.
 
 ### Read-only, zero risk (recommended first)
 
@@ -102,6 +106,8 @@ While an action is still `Queued`, each row carries its own **Cancel** button an
 
 ```bash
 npm run dev            # dev server with reload
+npm run doctor         # is it working? what is missing?
+npm run doctor -- --verify   # ...and does Instagram still accept the session?
 npm run build && npm start
 npm run login          # capture a session through a real browser
 npm run import -- FILE # load a data export from the CLI
@@ -125,7 +131,7 @@ src/
   routes/            JSON API
 ```
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the decisions behind that shape.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the decisions behind that shape, and [`docs/RUNNING.md`](docs/RUNNING.md) for how to run and verify each piece.
 
 ## Not included, on purpose
 
